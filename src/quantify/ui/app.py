@@ -13,7 +13,7 @@ import streamlit as st
 
 from quantify.alerts.dispatch import check_and_alert
 from quantify.backtest.runner import STRATEGIES, run_and_store
-from quantify.config import load_config
+from quantify.config import add_watchlist_symbol, load_config, remove_watchlist_symbol
 from quantify.ingest.pipeline import run_ingestion
 from quantify.journal.manager import close_position, journal_stats, open_position
 from quantify.scanner.gex import dollar_gex_by_strike
@@ -36,6 +36,21 @@ if st.sidebar.button("Refresh data now", help="Runs one ingestion pass for this 
     with st.spinner(f"Fetching {symbol} chain..."):
         rows = run_ingestion(con, config, symbols=[symbol])
     st.sidebar.success(f"Ingested {rows.get(symbol, 0)} rows for {symbol}")
+
+with st.sidebar.expander("Manage watchlist (FR-002)"):
+    new_symbol = st.text_input("Add symbol", value="", key="add_symbol_input").strip().upper()
+    add_col, remove_col = st.columns(2)
+    if add_col.button("Add", disabled=not new_symbol):
+        try:
+            config = add_watchlist_symbol(new_symbol)
+            st.success(f"Added {new_symbol}")
+            st.rerun()
+        except ValueError as exc:
+            st.error(str(exc))
+    if remove_col.button("Remove current", disabled=len(watchlist) <= 1):
+        config = remove_watchlist_symbol(symbol)
+        st.success(f"Removed {symbol}")
+        st.rerun()
 
 st.sidebar.info(
     "Free data is delayed ~15 minutes and flow signals are noisy -- this is "
