@@ -1,0 +1,24 @@
+[provider]
+name = "yfinance"
+
+[watchlist]
+symbols = ["AAPL", "SPY", "NVDA", "TSLA", "QQQ"]
+max_symbols = 50
+
+[schedule]
+refresh_minutes = 15
+market_hours_only = true
+
+[scanner]
+# Unusual activity: Vol > vol_oi_multiple * OI, and Vol >= min_volume (manual sec 1.5 / 3.8)
+vol_oi_multiple = 3.0
+min_volume = 200
+pc_ratio_bullish_below = 0.7
+pc_ratio_bearish_above = 1.3
+
+[greeks]
+risk_free_rate = 0.04
+
+[storage]
+db_path = "data/quantify.duckdb"
+parquet_dir = "data/parquet"
