@@ -57,10 +57,15 @@ with tab_chain:
         display_df = chain_df if expiry_filter == "All" else chain_df.filter(
             chain_df["expiry"].cast(str) == expiry_filter
         )
+        if display_df["is_adjusted"].any():
+            st.warning(
+                "Some contracts below are flagged 'adjusted' -- a stock split was detected after "
+                "these strikes were cached, so Greeks/IV for them may be stale (manual FR-018/sec 4.2)."
+            )
         st.dataframe(
             display_df.select([
                 "expiry", "strike", "right", "bid", "ask", "mid", "last",
-                "volume", "open_interest", "iv", "delta", "gamma", "theta", "vega", "rho",
+                "volume", "open_interest", "iv", "delta", "gamma", "theta", "vega", "rho", "is_adjusted",
             ]).to_pandas(),
             width='stretch',
             column_config={
@@ -70,6 +75,8 @@ with tab_chain:
                 "theta": st.column_config.NumberColumn(help="Daily time decay, $/contract (sec 3.3)"),
                 "vega": st.column_config.NumberColumn(help="Sensitivity per 1 vol point (sec 3.3)"),
                 "rho": st.column_config.NumberColumn(help="Sensitivity per 1% rate change (sec 3.3)"),
+                "is_adjusted": st.column_config.CheckboxColumn(
+                    "Adjusted?", help="Flagged after a detected stock split -- strike/Greeks may be stale (FR-018)"),
                 "open_interest": st.column_config.NumberColumn("OI", help="Contracts currently open (sec 1.3)"),
             },
         )

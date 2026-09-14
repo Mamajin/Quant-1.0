@@ -20,6 +20,7 @@ CREATE SEQUENCE IF NOT EXISTS seq_alerts START 1;
 CREATE SEQUENCE IF NOT EXISTS seq_backtest_runs START 1;
 CREATE SEQUENCE IF NOT EXISTS seq_positions START 1;
 CREATE SEQUENCE IF NOT EXISTS seq_journal START 1;
+CREATE SEQUENCE IF NOT EXISTS seq_corporate_actions START 1;
 
 CREATE TABLE IF NOT EXISTS symbols (
     symbol VARCHAR PRIMARY KEY,
@@ -36,7 +37,20 @@ CREATE TABLE IF NOT EXISTS option_contracts (
     strike DOUBLE,
     "right" VARCHAR,      -- 'C' | 'P' (quoted: RIGHT is a reserved SQL keyword)
     multiplier INTEGER DEFAULT 100,
-    style VARCHAR DEFAULT 'american'
+    style VARCHAR DEFAULT 'american',
+    -- FR-018 / sec 4.2: flag contracts whose strike predates a since-detected
+    -- stock split so Greeks/IV consumers know not to trust them (this app
+    -- doesn't retroactively adjust historical strikes, it just flags risk).
+    is_adjusted BOOLEAN DEFAULT FALSE
+);
+
+CREATE TABLE IF NOT EXISTS corporate_actions (
+    id BIGINT PRIMARY KEY DEFAULT nextval('seq_corporate_actions'),
+    symbol VARCHAR REFERENCES symbols(symbol),
+    action_date DATE,
+    action_type VARCHAR,   -- 'split' | 'dividend'
+    value DOUBLE,          -- split ratio (e.g. 4.0 for 4:1) or dividend $/share
+    detected_ts TIMESTAMP
 );
 
 -- Not in the manual's schema sketch verbatim, but "suggested" (sec 2.12) and

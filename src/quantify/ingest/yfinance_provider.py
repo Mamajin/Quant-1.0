@@ -84,3 +84,21 @@ class YFinanceProvider:
                                      "Close": "close", "Volume": "volume"})
         hist.index.name = "date"
         return hist[["open", "high", "low", "close", "volume"]]
+
+    def fetch_corporate_actions(self, symbol: str) -> pd.DataFrame:
+        ticker = yf.Ticker(symbol)
+        rows = []
+        try:
+            for action_date, ratio in ticker.splits.items():
+                rows.append({"date": action_date.date(), "action_type": "split", "value": float(ratio)})
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("yfinance: could not fetch splits for %s (%s)", symbol, exc)
+        try:
+            for action_date, amount in ticker.dividends.items():
+                rows.append({"date": action_date.date(), "action_type": "dividend", "value": float(amount)})
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("yfinance: could not fetch dividends for %s (%s)", symbol, exc)
+
+        if not rows:
+            return pd.DataFrame(columns=["date", "action_type", "value"])
+        return pd.DataFrame(rows)

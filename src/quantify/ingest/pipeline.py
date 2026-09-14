@@ -9,6 +9,7 @@ import logging
 import polars as pl
 
 from ..config import QuantifyConfig
+from ..corporate_actions.detector import detect_and_flag
 from ..greeks.bsm import all_greeks
 from ..greeks.iv import solve_iv
 from ..storage import repo
@@ -99,6 +100,11 @@ def ingest_symbol(con, config: QuantifyConfig, provider: Provider, symbol: str,
     repo.upsert_symbol(con, symbol)
     repo.upsert_contracts(con, contracts)
     repo.insert_underlying_quote(con, symbol, ts, spot)
+
+    try:
+        detect_and_flag(con, provider, symbol)
+    except Exception as exc:  # noqa: BLE001 - corporate-action detection must never break ingestion
+        logger.warning("Corporate-action detection failed for %s: %s", symbol, exc)
 
     snapshot_df = processed.with_columns([
         pl.Series("contract_id", [c["contract_id"] for c in contracts]),

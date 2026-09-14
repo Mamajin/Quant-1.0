@@ -35,3 +35,8 @@ class Provider(Protocol):
         by the backtester (FR-009). Columns: open, high, low, close, volume;
         DatetimeIndex."""
         ...
+
+    def fetch_corporate_actions(self, symbol: str) -> pd.DataFrame:
+        """Splits and dividends (FR-018). Columns: date, action_type
+        ('split'|'dividend'), value (split ratio or $/share dividend)."""
+        ...

@@ -73,7 +73,7 @@ def latest_chain(con: duckdb.DuckDBPyConnection, symbol: str) -> pl.DataFrame:
             JOIN option_contracts oc USING (contract_id)
             WHERE oc.underlying = ?
         )
-        SELECT oc.underlying, oc.expiry, oc.strike, oc."right", l.*
+        SELECT oc.underlying, oc.expiry, oc.strike, oc."right", oc.is_adjusted, l.*
         FROM latest l
         JOIN option_contracts oc USING (contract_id)
         WHERE l.rn = 1
@@ -116,7 +116,7 @@ def recent_snapshot_timestamps(con: duckdb.DuckDBPyConnection, symbol: str, n: i
 def chain_snapshot_at(con: duckdb.DuckDBPyConnection, symbol: str, ts) -> pl.DataFrame:
     return con.execute(
         """
-        SELECT oc.underlying, oc.expiry, oc.strike, oc."right", cs.*
+        SELECT oc.underlying, oc.expiry, oc.strike, oc."right", oc.is_adjusted, cs.*
         FROM chain_snapshots cs
         JOIN option_contracts oc USING (contract_id)
         WHERE oc.underlying = ? AND cs.ts = ?
@@ -185,6 +185,38 @@ def insert_alert(con: duckdb.DuckDBPyConnection, signal_id: int, channel: str,
         "INSERT INTO alerts (signal_id, channel, sent_ts, status) VALUES (?, ?, ?, ?)",
         [signal_id, channel, sent_ts, status],
     )
+
+
+def corporate_action_exists(con: duckdb.DuckDBPyConnection, symbol: str,
+                             action_date: dt.date, action_type: str) -> bool:
+    row = con.execute(
+        "SELECT 1 FROM corporate_actions WHERE symbol = ? AND action_date = ? AND action_type = ? LIMIT 1",
+        [symbol, action_date, action_type],
+    ).fetchone()
+    return row is not None
+
+
+def insert_corporate_action(con: duckdb.DuckDBPyConnection, symbol: str, action_date: dt.date,
+                             action_type: str, value: float, detected_ts: dt.datetime | None = None) -> int:
+    row = con.execute(
+        "INSERT INTO corporate_actions (symbol, action_date, action_type, value, detected_ts) "
+        "VALUES (?, ?, ?, ?, ?) RETURNING id",
+        [symbol, action_date, action_type, value, detected_ts or dt.datetime.now()],
+    ).fetchone()
+    return int(row[0])
+
+
+def flag_contracts_adjusted(con: duckdb.DuckDBPyConnection, underlying: str, on_or_after: dt.date) -> int:
+    """Flag existing option_contracts rows for `underlying` expiring on/after
+    a detected split date as is_adjusted (FR-018): our locally cached
+    strikes may predate the split and not reflect standard post-split
+    deliverables. Returns the number of contracts flagged."""
+    rows = con.execute(
+        'UPDATE option_contracts SET is_adjusted = TRUE WHERE underlying = ? AND expiry >= ? '
+        "AND is_adjusted = FALSE RETURNING contract_id",
+        [underlying, on_or_after],
+    ).fetchall()
+    return len(rows)
 
 
 def insert_position(con: duckdb.DuckDBPyConnection, symbol: str, contract_id: str | None,
