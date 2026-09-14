@@ -15,6 +15,7 @@ from ..greeks.iv import solve_iv
 from ..storage import repo
 from .alpaca_provider import AlpacaProvider
 from .base import Provider
+from .retry import retry_with_backoff
 from .tradier_provider import TradierProvider
 from .yfinance_provider import YFinanceProvider
 
@@ -83,8 +84,10 @@ def process_chain(raw: pl.DataFrame, spot: float, risk_free_rate: float,
 def ingest_symbol(con, config: QuantifyConfig, provider: Provider, symbol: str,
                    ts: dt.datetime | None = None) -> int:
     ts = ts or dt.datetime.now()
-    spot = provider.fetch_spot(symbol)
-    raw = provider.fetch_chain(symbol)
+    # NFR-003: transient provider errors (rate limits, blips) self-heal via
+    # retry before we give up on this symbol for the run.
+    spot = retry_with_backoff(lambda: provider.fetch_spot(symbol))
+    raw = retry_with_backoff(lambda: provider.fetch_chain(symbol))
     if raw.is_empty():
         logger.warning("No option chain returned for %s", symbol)
         return 0
