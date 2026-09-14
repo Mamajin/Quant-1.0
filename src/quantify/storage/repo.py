@@ -187,6 +187,70 @@ def insert_alert(con: duckdb.DuckDBPyConnection, signal_id: int, channel: str,
     )
 
 
+def insert_position(con: duckdb.DuckDBPyConnection, symbol: str, contract_id: str | None,
+                     qty: float, entry_price: float, entry_ts: dt.datetime) -> int:
+    row = con.execute(
+        "INSERT INTO positions (symbol, contract_id, qty, entry_price, entry_ts) VALUES (?, ?, ?, ?, ?) RETURNING id",
+        [symbol, contract_id, qty, entry_price, entry_ts],
+    ).fetchone()
+    return int(row[0])
+
+
+def close_position(con: duckdb.DuckDBPyConnection, position_id: int, exit_price: float,
+                    exit_ts: dt.datetime, pnl: float) -> None:
+    con.execute(
+        'UPDATE positions SET exit_price = ?, exit_ts = ?, pnl = ? WHERE id = ?',
+        [exit_price, exit_ts, pnl, position_id],
+    )
+
+
+def insert_journal_entry(con: duckdb.DuckDBPyConnection, position_id: int, reason_entry: str | None,
+                          tags: str | None = None, notes: str | None = None) -> int:
+    row = con.execute(
+        "INSERT INTO journal (position_id, reason_entry, tags, notes) VALUES (?, ?, ?, ?) RETURNING id",
+        [position_id, reason_entry, tags, notes],
+    ).fetchone()
+    return int(row[0])
+
+
+def update_journal_exit_reason(con: duckdb.DuckDBPyConnection, position_id: int, reason_exit: str | None) -> None:
+    con.execute("UPDATE journal SET reason_exit = ? WHERE position_id = ?", [reason_exit, position_id])
+
+
+def open_positions(con: duckdb.DuckDBPyConnection) -> pl.DataFrame:
+    return con.execute(
+        """
+        SELECT p.*, j.reason_entry, j.tags, j.notes
+        FROM positions p
+        LEFT JOIN journal j ON j.position_id = p.id
+        WHERE p.exit_ts IS NULL
+        ORDER BY p.entry_ts DESC
+        """
+    ).pl()
+
+
+def closed_positions(con: duckdb.DuckDBPyConnection, limit: int = 200) -> pl.DataFrame:
+    return con.execute(
+        """
+        SELECT p.*, j.reason_entry, j.reason_exit, j.tags, j.notes
+        FROM positions p
+        LEFT JOIN journal j ON j.position_id = p.id
+        WHERE p.exit_ts IS NOT NULL
+        ORDER BY p.exit_ts DESC
+        LIMIT ?
+        """,
+        [limit],
+    ).pl()
+
+
+def position_by_id(con: duckdb.DuckDBPyConnection, position_id: int) -> dict | None:
+    row = con.execute("SELECT * FROM positions WHERE id = ?", [position_id]).fetchone()
+    if row is None:
+        return None
+    cols = [d[0] for d in con.description]
+    return dict(zip(cols, row))
+
+
 def insert_backtest_run(con: duckdb.DuckDBPyConnection, strategy: str, params: dict,
                          start: dt.date, end: dt.date, stats: dict) -> int:
     row = con.execute(

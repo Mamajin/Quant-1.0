@@ -15,6 +15,7 @@ from quantify.alerts.dispatch import check_and_alert
 from quantify.backtest.runner import STRATEGIES, run_and_store
 from quantify.config import load_config
 from quantify.ingest.pipeline import run_ingestion
+from quantify.journal.manager import close_position, journal_stats, open_position
 from quantify.scanner.gex import dollar_gex_by_strike
 from quantify.service import get_chain, get_flow, get_gex_summary, get_scan
 from quantify.storage import repo
@@ -41,8 +42,8 @@ st.sidebar.info(
     "an edge-hunting research tool, not a money printer (manual sec 1.8/Appendix D)."
 )
 
-tab_chain, tab_scanner, tab_flow, tab_gex, tab_backtest = st.tabs(
-    ["Chain Viewer", "Scanner", "Flow Feed", "GEX / Max Pain", "Backtest"]
+tab_chain, tab_scanner, tab_flow, tab_gex, tab_backtest, tab_journal = st.tabs(
+    ["Chain Viewer", "Scanner", "Flow Feed", "GEX / Max Pain", "Backtest", "Journal"]
 )
 
 with tab_chain:
@@ -208,5 +209,62 @@ with tab_backtest:
 
             st.line_chart(report["equity_curve"], height=300)
             st.caption(f"Saved as backtest_runs id={report['run_id']}.")
+
+with tab_journal:
+    st.subheader("Paper trading journal")
+    st.caption(
+        "Manual FR-010: record entries/exits and P&L. This is paper-only "
+        "record-keeping -- there is no broker execution here (that's Phase 4 "
+        "in the manual's roadmap, not implemented)."
+    )
+
+    stats = journal_stats(con)
+    j1, j2, j3, j4 = st.columns(4)
+    j1.metric("Closed trades", stats["n_closed"])
+    j2.metric("Total P&L", f"${stats['total_pnl']:,.2f}")
+    j3.metric("Win rate", f"{stats['win_rate']:.1%}", help="meaningless without payoff ratio -- see profit factor too (sec 3.8)")
+    j4.metric("Profit factor", f"{stats['profit_factor']:.2f}", help=">1.5 good (sec 3.8)")
+
+    with st.form("open_position_form", clear_on_submit=True):
+        st.markdown("**Open a paper position**")
+        oc1, oc2, oc3 = st.columns(3)
+        pos_symbol = oc1.text_input("Symbol", value=symbol)
+        contract_id_input = oc2.text_input("Contract ID (blank = shares)", value="",
+                                            help="e.g. AAPL_20260116_C_150 -- from the Chain Viewer tab")
+        qty = oc3.number_input("Qty", value=1.0, step=1.0,
+                                help="Contracts if Contract ID set (100x multiplier), else shares (1x)")
+        entry_price = st.number_input("Entry price", min_value=0.0, value=1.0, step=0.01)
+        reason_entry = st.text_input("Reason for entry", value="")
+        tags = st.text_input("Tags (comma-separated)", value="")
+        if st.form_submit_button("Open position"):
+            pos_id = open_position(
+                con, pos_symbol.upper(), qty, entry_price,
+                contract_id=contract_id_input or None, reason_entry=reason_entry or None,
+                tags=tags or None,
+            )
+            st.success(f"Opened position id={pos_id}")
+
+    open_df = repo.open_positions(con)
+    st.markdown("**Open positions**")
+    if open_df.is_empty():
+        st.caption("No open positions.")
+    else:
+        st.dataframe(open_df.to_pandas(), width='stretch')
+        with st.form("close_position_form"):
+            st.markdown("**Close a position**")
+            cc1, cc2 = st.columns(2)
+            close_id = cc1.selectbox("Position ID", open_df["id"].to_list())
+            exit_price = cc2.number_input("Exit price", min_value=0.0, value=1.0, step=0.01)
+            reason_exit = st.text_input("Reason for exit", value="")
+            if st.form_submit_button("Close position"):
+                pnl = close_position(con, int(close_id), exit_price, reason_exit=reason_exit or None)
+                st.success(f"Closed position {close_id}: P&L ${pnl:,.2f}")
+
+    closed_df = repo.closed_positions(con, limit=100)
+    st.markdown("**Closed positions**")
+    if closed_df.is_empty():
+        st.caption("No closed positions yet.")
+    else:
+        st.dataframe(closed_df.to_pandas(), width='stretch')
 
 st.sidebar.caption(f"Last render: {dt.datetime.now():%Y-%m-%d %H:%M:%S}")
