@@ -11,6 +11,7 @@ import datetime as dt
 import plotly.graph_objects as go
 import streamlit as st
 
+from quantify.backtest.runner import STRATEGIES, run_and_store
 from quantify.config import load_config
 from quantify.ingest.pipeline import run_ingestion
 from quantify.scanner.gex import dollar_gex_by_strike
@@ -38,7 +39,9 @@ st.sidebar.info(
     "an edge-hunting research tool, not a money printer (manual sec 1.8/Appendix D)."
 )
 
-tab_chain, tab_scanner, tab_flow, tab_gex = st.tabs(["Chain Viewer", "Scanner", "Flow Feed", "GEX / Max Pain"])
+tab_chain, tab_scanner, tab_flow, tab_gex, tab_backtest = st.tabs(
+    ["Chain Viewer", "Scanner", "Flow Feed", "GEX / Max Pain", "Backtest"]
+)
 
 with tab_chain:
     st.subheader(f"{symbol} option chain (latest snapshot)")
@@ -130,5 +133,60 @@ with tab_gex:
             fig.add_vline(x=gex["gamma_flip"], line_dash="dot", line_color="orange", annotation_text="gamma flip")
         fig.update_layout(xaxis_title="Strike", yaxis_title="Dollar GEX / 1% move", height=450)
         st.plotly_chart(fig, width='stretch')
+
+with tab_backtest:
+    st.subheader(f"{symbol} backtest -- SMA crossover")
+    st.caption(
+        "Vectorized long-only backtest on daily closes, fees/slippage applied "
+        "on every entry and exit, next-bar execution to avoid look-ahead bias "
+        "(manual FR-009, sec 1.6)."
+    )
+    bc1, bc2, bc3, bc4 = st.columns(4)
+    fast = bc1.number_input("Fast MA", min_value=2, value=10, help="Fast moving-average window (days)")
+    slow = bc2.number_input("Slow MA", min_value=3, value=30, help="Slow moving-average window (days)")
+    period = bc3.selectbox("History", ["1y", "2y", "5y", "max"], index=1)
+    n_trials = bc4.number_input(
+        "Trials tried", min_value=1, value=1,
+        help="How many parameter combos you've tried before this one -- feeds the Deflated Sharpe Ratio (sec 1.6)",
+    )
+    fees_col, slip_col = st.columns(2)
+    fees = fees_col.number_input("Fees (fraction)", min_value=0.0, value=0.001, step=0.0005, format="%.4f")
+    slippage = slip_col.number_input("Slippage (fraction)", min_value=0.0, value=0.001, step=0.0005, format="%.4f")
+
+    if st.button("Run backtest"):
+        if fast >= slow:
+            st.error("Fast MA must be shorter than slow MA.")
+        else:
+            with st.spinner(f"Backtesting {symbol}..."):
+                report = run_and_store(
+                    con, config, symbol, strategy="sma_crossover", period=period,
+                    fees=fees, slippage=slippage, n_trials=int(n_trials), fast=int(fast), slow=int(slow),
+                )
+            stats = report["stats"]
+            dsr = report["deflated_sharpe"]
+
+            m1, m2, m3, m4 = st.columns(4)
+            m1.metric("CAGR", f"{stats['cagr']:.2%}", help="Compound annual growth rate (sec 3.7)")
+            m2.metric("Sharpe", f"{stats['sharpe']:.2f}", help="(return - risk-free) / volatility (sec 3.7)")
+            m3.metric("Max drawdown", f"{stats['max_drawdown']:.2%}", help="Worst peak-to-trough loss (sec 3.7)")
+            m4.metric("Profit factor", f"{stats['profit_factor']:.2f}", help="Gross profit / gross loss, >1.5 good (sec 3.7/3.8)")
+
+            m5, m6, m7, m8 = st.columns(4)
+            m5.metric("Sortino", f"{stats['sortino']:.2f}")
+            m6.metric("Calmar", f"{stats['calmar']:.2f}")
+            m7.metric("Win rate", f"{stats['win_rate']:.2%}")
+            m8.metric("Trades", stats["n_trades"])
+
+            st.metric(
+                "Deflated Sharpe Ratio", f"{dsr['dsr']:.1%}",
+                help=(f"Probability the true Sharpe exceeds the {int(n_trials)}-trial noise floor "
+                      f"(SR0={dsr['sr0_noise_floor']:.2f}). Below 95% is a common 'probably overfit' cutoff "
+                      "(Bailey & Lopez de Prado 2014, sec 1.6)."),
+            )
+            if dsr["likely_overfit"]:
+                st.warning("This result does not clear the multiple-testing bar -- treat it as noise, not edge.")
+
+            st.line_chart(report["equity_curve"], height=300)
+            st.caption(f"Saved as backtest_runs id={report['run_id']}.")
 
 st.sidebar.caption(f"Last render: {dt.datetime.now():%Y-%m-%d %H:%M:%S}")

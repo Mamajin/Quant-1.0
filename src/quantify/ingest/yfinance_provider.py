@@ -74,3 +74,13 @@ class YFinanceProvider:
         return pl.from_pandas(combined)[
             ["underlying", "expiry", "strike", "right", "bid", "ask", "last", "volume", "open_interest"]
         ]
+
+    def fetch_history(self, symbol: str, period: str = "2y", interval: str = "1d") -> pd.DataFrame:
+        ticker = yf.Ticker(symbol)
+        hist = ticker.history(period=period, interval=interval, auto_adjust=True)
+        if hist.empty:
+            raise RuntimeError(f"yfinance: no price history for {symbol!r}")
+        hist = hist.rename(columns={"Open": "open", "High": "high", "Low": "low",
+                                     "Close": "close", "Volume": "volume"})
+        hist.index.name = "date"
+        return hist[["open", "high", "low", "close", "volume"]]

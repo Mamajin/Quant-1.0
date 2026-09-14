@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from typing import Protocol
 
+import pandas as pd
 import polars as pl
 
 RAW_CHAIN_COLUMNS = [
@@ -27,4 +28,10 @@ class Provider(Protocol):
         Columns: RAW_CHAIN_COLUMNS. No Greeks/IV -- those are computed
         locally in the greeks module so results are consistent across
         providers."""
+        ...
+
+    def fetch_history(self, symbol: str, period: str = "2y", interval: str = "1d") -> pd.DataFrame:
+        """Daily (or other interval) OHLCV history for the underlying, used
+        by the backtester (FR-009). Columns: open, high, low, close, volume;
+        DatetimeIndex."""
         ...

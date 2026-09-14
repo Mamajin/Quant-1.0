@@ -61,7 +61,11 @@ def insert_chain_snapshots(con: duckdb.DuckDBPyConnection, df: pl.DataFrame) -> 
 
 def latest_chain(con: duckdb.DuckDBPyConnection, symbol: str) -> pl.DataFrame:
     """Most recent snapshot per contract for a symbol, joined with contract metadata."""
-    result = con.execute(
+    # Use DuckDB's own .pl() rather than .arrow() + pl.from_arrow(): .arrow()
+    # returns an unmaterialized RecordBatchReader, and polars' from_arrow()
+    # errors on a genuinely empty result (0 record batches, e.g. before any
+    # ingestion has run) with "Must pass schema, or at least one RecordBatch".
+    return con.execute(
         """
         WITH latest AS (
             SELECT cs.*, ROW_NUMBER() OVER (PARTITION BY contract_id ORDER BY ts DESC) AS rn
@@ -76,8 +80,7 @@ def latest_chain(con: duckdb.DuckDBPyConnection, symbol: str) -> pl.DataFrame:
         ORDER BY oc.expiry, oc.strike, oc."right"
         """,
         [symbol],
-    ).arrow()
-    return pl.from_arrow(result)
+    ).pl()
 
 
 def insert_underlying_quote(con: duckdb.DuckDBPyConnection, symbol: str, ts: dt.datetime, spot: float) -> None:
@@ -111,7 +114,7 @@ def recent_snapshot_timestamps(con: duckdb.DuckDBPyConnection, symbol: str, n: i
 
 
 def chain_snapshot_at(con: duckdb.DuckDBPyConnection, symbol: str, ts) -> pl.DataFrame:
-    result = con.execute(
+    return con.execute(
         """
         SELECT oc.underlying, oc.expiry, oc.strike, oc."right", cs.*
         FROM chain_snapshots cs
@@ -120,8 +123,7 @@ def chain_snapshot_at(con: duckdb.DuckDBPyConnection, symbol: str, ts) -> pl.Dat
         ORDER BY oc.expiry, oc.strike, oc."right"
         """,
         [symbol, ts],
-    ).arrow()
-    return pl.from_arrow(result)
+    ).pl()
 
 
 def insert_signals(con: duckdb.DuckDBPyConnection, signals: list[dict]) -> None:
@@ -150,7 +152,25 @@ def latest_signals(con: duckdb.DuckDBPyConnection, symbol: str | None = None,
         params.append(rule_name)
     query += " ORDER BY ts DESC LIMIT ?"
     params.append(limit)
-    return pl.from_arrow(con.execute(query, params).arrow())
+    return con.execute(query, params).pl()
+
+
+def insert_backtest_run(con: duckdb.DuckDBPyConnection, strategy: str, params: dict,
+                         start: dt.date, end: dt.date, stats: dict) -> int:
+    row = con.execute(
+        """
+        INSERT INTO backtest_runs (strategy, params, start, "end", sharpe, cagr, max_dd, profit_factor, created_ts)
+        VALUES (?, CAST(? AS JSON), ?, ?, ?, ?, ?, ?, ?)
+        RETURNING id
+        """,
+        [strategy, json.dumps(params), start, end, stats.get("sharpe"), stats.get("cagr"),
+         stats.get("max_drawdown"), stats.get("profit_factor"), dt.datetime.now()],
+    ).fetchone()
+    return int(row[0])
+
+
+def latest_backtest_runs(con: duckdb.DuckDBPyConnection, limit: int = 50) -> pl.DataFrame:
+    return con.execute("SELECT * FROM backtest_runs ORDER BY created_ts DESC LIMIT ?", [limit]).pl()
 
 
 def export_daily_parquet(con: duckdb.DuckDBPyConnection, storage: StorageConfig,
