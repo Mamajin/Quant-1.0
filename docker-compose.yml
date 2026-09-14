@@ -1,0 +1,43 @@
+# DuckDB single-writer limitation (manual sec 2.9): only ONE of these
+# services should hold a read-write connection to ./data at a time. `ui`
+# (via its "Refresh data now" button) and `scheduler` both write; `api` is
+# read-mostly but still opens read-write. Run `ui` alone for the normal
+# local workflow. `api` and `scheduler` are opt-in via profiles for when
+# you deliberately want just that piece running instead of (not alongside)
+# `ui` -- point them at a separate ./data path if you truly need two at once.
+#
+# Before first run: `cp .env.example .env` (only needed if you're using
+# alerts, Tradier, or Alpaca -- the default yfinance provider needs no keys).
+
+services:
+  ui:
+    build: .
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./data:/app/data
+      - ./config:/app/config
+    env_file:
+      - .env
+
+  api:
+    build: .
+    profiles: ["api"]
+    command: ["uv", "run", "uvicorn", "quantify.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+      - ./config:/app/config
+    env_file:
+      - .env
+
+  scheduler:
+    build: .
+    profiles: ["scheduler"]
+    command: ["uv", "run", "python", "-m", "quantify.ingest.scheduler"]
+    volumes:
+      - ./data:/app/data
+      - ./config:/app/config
+    env_file:
+      - .env
