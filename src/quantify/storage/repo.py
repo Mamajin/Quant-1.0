@@ -155,6 +155,38 @@ def latest_signals(con: duckdb.DuckDBPyConnection, symbol: str | None = None,
     return con.execute(query, params).pl()
 
 
+def signal_exists_since(con: duckdb.DuckDBPyConnection, symbol: str, rule_name: str,
+                         contract_id: str, since: dt.datetime) -> bool:
+    """Dedup check for alerting (manual FR-008): has this exact contract
+    already fired this rule within the dedup window?"""
+    row = con.execute(
+        """
+        SELECT 1 FROM signals
+        WHERE symbol = ? AND rule_name = ? AND (payload->>'contract_id') = ? AND ts >= ?
+        LIMIT 1
+        """,
+        [symbol, rule_name, contract_id, since],
+    ).fetchone()
+    return row is not None
+
+
+def insert_signal(con: duckdb.DuckDBPyConnection, ts: dt.datetime, symbol: str,
+                   rule_name: str, score: float, payload: dict) -> int:
+    row = con.execute(
+        "INSERT INTO signals (ts, symbol, rule_name, score, payload) VALUES (?, ?, ?, ?, CAST(? AS JSON)) RETURNING id",
+        [ts, symbol, rule_name, score, json.dumps(payload)],
+    ).fetchone()
+    return int(row[0])
+
+
+def insert_alert(con: duckdb.DuckDBPyConnection, signal_id: int, channel: str,
+                  sent_ts: dt.datetime, status: str) -> None:
+    con.execute(
+        "INSERT INTO alerts (signal_id, channel, sent_ts, status) VALUES (?, ?, ?, ?)",
+        [signal_id, channel, sent_ts, status],
+    )
+
+
 def insert_backtest_run(con: duckdb.DuckDBPyConnection, strategy: str, params: dict,
                          start: dt.date, end: dt.date, stats: dict) -> int:
     row = con.execute(

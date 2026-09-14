@@ -19,6 +19,13 @@ pc_ratio_bearish_above = 1.3
 [greeks]
 risk_free_rate = 0.04
 
+[alerts]
+# FR-008. channels: any of "telegram", "desktop". Telegram needs
+# TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID in .env (see .env.example).
+enabled = false
+channels = []
+dedup_hours = 24.0
+
 [storage]
 db_path = "data/quantify.duckdb"
 parquet_dir = "data/parquet"

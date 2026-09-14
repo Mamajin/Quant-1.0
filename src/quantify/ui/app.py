@@ -11,11 +11,13 @@ import datetime as dt
 import plotly.graph_objects as go
 import streamlit as st
 
+from quantify.alerts.dispatch import check_and_alert
 from quantify.backtest.runner import STRATEGIES, run_and_store
 from quantify.config import load_config
 from quantify.ingest.pipeline import run_ingestion
 from quantify.scanner.gex import dollar_gex_by_strike
 from quantify.service import get_chain, get_flow, get_gex_summary, get_scan
+from quantify.storage import repo
 from quantify.storage.db import connect
 
 st.set_page_config(page_title="Quantify", layout="wide")
@@ -88,6 +90,24 @@ with tab_scanner:
         st.dataframe(scan["unusual_activity"], width='stretch')
     else:
         st.caption("No unusual-activity rows for this symbol's latest snapshot.")
+
+    st.divider()
+    st.caption(
+        f"Alerts (FR-008): {'enabled' if config.alerts.enabled else 'disabled'} "
+        f"-- channels: {config.alerts.channels or 'none configured'} (see config/config.toml [alerts])"
+    )
+    if st.button("Check & send alerts now", disabled=not config.alerts.enabled or not config.alerts.channels):
+        dispatched = check_and_alert(con, config, symbol)
+        if dispatched:
+            for d in dispatched:
+                st.success(f"[{d['channel']}] {'sent' if d['ok'] else 'FAILED'}: {d['message']}")
+        else:
+            st.info("Nothing new to alert on (either no unusual activity, or already alerted within the dedup window).")
+
+    recent_signals = repo.latest_signals(con, symbol=symbol, limit=20)
+    if not recent_signals.is_empty():
+        st.caption("Recent signals for this symbol:")
+        st.dataframe(recent_signals.to_pandas(), width='stretch')
 
 with tab_flow:
     st.subheader(f"{symbol} inferred flow (snapshot diff)")

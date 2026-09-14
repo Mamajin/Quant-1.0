@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import logging
 
+from ..alerts.dispatch import check_and_alert
 from ..config import load_config
 from ..storage.db import connect
 from .pipeline import run_ingestion
@@ -19,6 +20,8 @@ def main() -> None:
     parser.add_argument("--symbols", type=str, default=None,
                          help="Comma-separated symbols; defaults to config watchlist")
     parser.add_argument("--config", type=str, default=None, help="Path to config.toml")
+    parser.add_argument("--alert", action="store_true",
+                         help="Also run the unusual-activity alert check after ingesting (FR-008)")
     args = parser.parse_args()
 
     config = load_config(args.config)
@@ -29,6 +32,10 @@ def main() -> None:
         results = run_ingestion(con, config, symbols)
         for symbol, rows in results.items():
             print(f"{symbol}: {rows} snapshot rows ingested")
+            if args.alert:
+                dispatched = check_and_alert(con, config, symbol)
+                for d in dispatched:
+                    print(f"  alert -> {d['channel']}: {'OK' if d['ok'] else 'FAILED'}: {d['message']}")
     finally:
         con.close()
 

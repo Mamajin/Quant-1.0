@@ -48,6 +48,12 @@ class GreeksConfig(BaseModel):
     risk_free_rate: float = 0.04
 
 
+class AlertsConfig(BaseModel):
+    enabled: bool = False
+    channels: list[str] = []  # subset of "telegram", "desktop"
+    dedup_hours: float = 24.0  # don't re-alert the same contract within this window
+
+
 class StorageConfig(BaseModel):
     db_path: str = "data/quantify.duckdb"
     parquet_dir: str = "data/parquet"
@@ -65,6 +71,7 @@ class QuantifyConfig(BaseModel):
     schedule: ScheduleConfig = ScheduleConfig()
     scanner: ScannerConfig = ScannerConfig()
     greeks: GreeksConfig = GreeksConfig()
+    alerts: AlertsConfig = AlertsConfig()
     storage: StorageConfig = StorageConfig()
 
 

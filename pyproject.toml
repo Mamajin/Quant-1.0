@@ -20,6 +20,8 @@ dependencies = [
     "pydantic>=2.6.0",
     "tomli>=2.0.0; python_version < '3.11'",
     "python-dotenv>=1.0.0",
+    "requests>=2.34.2",
+    "plyer>=2.1.0",
 ]
 
 [project.optional-dependencies]

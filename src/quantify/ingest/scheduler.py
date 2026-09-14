@@ -11,6 +11,7 @@ from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.blocking import BlockingScheduler
 
+from ..alerts.dispatch import check_and_alert
 from ..config import load_config
 from ..storage.db import connect
 from .pipeline import run_ingestion
@@ -39,6 +40,12 @@ def run_scheduler(config_path: str | None = None) -> None:
             return
         results = run_ingestion(con, config)
         logger.info("Ingestion complete: %s", results)
+
+        if config.alerts.enabled:
+            for symbol in results:
+                dispatched = check_and_alert(con, config, symbol)
+                if dispatched:
+                    logger.info("Alerts for %s: %s", symbol, dispatched)
 
     scheduler = BlockingScheduler()
     scheduler.add_job(job, "interval", minutes=config.schedule.refresh_minutes, next_run_time=dt.datetime.now())
