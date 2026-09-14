@@ -14,6 +14,7 @@ import streamlit as st
 from quantify.alerts.dispatch import check_and_alert
 from quantify.backtest.runner import STRATEGIES, run_and_store
 from quantify.config import add_watchlist_symbol, load_config, remove_watchlist_symbol
+from quantify.export import to_bytes
 from quantify.ingest.pipeline import run_ingestion
 from quantify.journal.manager import close_position, journal_stats, open_position
 from quantify.scanner.gex import dollar_gex_by_strike
@@ -51,6 +52,18 @@ with st.sidebar.expander("Manage watchlist (FR-002)"):
         config = remove_watchlist_symbol(symbol)
         st.success(f"Removed {symbol}")
         st.rerun()
+
+with st.sidebar.expander("Export data (FR-014)"):
+    export_table_name = st.selectbox("Table", repo.EXPORTABLE_TABLES)
+    export_fmt = st.radio("Format", ["csv", "parquet"], horizontal=True)
+    export_df = repo.export_table(con, export_table_name)
+    st.caption(f"{export_df.height} rows")
+    st.download_button(
+        "Download",
+        data=to_bytes(export_df, export_fmt),
+        file_name=f"{export_table_name}.{export_fmt}",
+        disabled=export_df.is_empty(),
+    )
 
 st.sidebar.info(
     "Free data is delayed ~15 minutes and flow signals are noisy -- this is "

@@ -8,9 +8,12 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Query
+from fastapi.responses import Response
 
 from ..config import load_config
+from ..export import to_bytes
 from ..service import get_chain, get_flow, get_gex_summary, get_scan
+from ..storage import repo
 from ..storage.db import connect
 
 
@@ -53,3 +56,17 @@ def read_gex(symbol: str):
 def read_max_pain(symbol: str):
     summary = get_gex_summary(app.state.con, app.state.config, symbol.upper())
     return {"symbol": summary["symbol"], "max_pain": summary["max_pain"]}
+
+
+@app.get("/export/{table}")
+def export_table(table: str, fmt: str = Query("csv", pattern="^(csv|parquet)$")):
+    """FR-014: CSV/Parquet export of any known table."""
+    if table not in repo.EXPORTABLE_TABLES:
+        raise HTTPException(status_code=404, detail=f"Unknown table {table!r}; must be one of {repo.EXPORTABLE_TABLES}")
+    df = repo.export_table(app.state.con, table)
+    content = to_bytes(df, fmt)
+    media_type = "text/csv" if fmt == "csv" else "application/octet-stream"
+    return Response(
+        content=content, media_type=media_type,
+        headers={"Content-Disposition": f'attachment; filename="{table}.{fmt}"'},
+    )

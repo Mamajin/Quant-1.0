@@ -301,6 +301,24 @@ def latest_backtest_runs(con: duckdb.DuckDBPyConnection, limit: int = 50) -> pl.
     return con.execute("SELECT * FROM backtest_runs ORDER BY created_ts DESC LIMIT ?", [limit]).pl()
 
 
+EXPORTABLE_TABLES = (
+    "symbols", "option_contracts", "chain_snapshots", "trades_flow", "signals",
+    "alerts", "backtest_runs", "positions", "journal", "corporate_actions", "underlying_quotes",
+)
+
+
+def export_table(con: duckdb.DuckDBPyConnection, table_name: str, limit: int | None = None) -> pl.DataFrame:
+    """FR-014: fetch any known table for CSV/Parquet export. `table_name` is
+    checked against an allowlist (EXPORTABLE_TABLES) since it's interpolated
+    into SQL -- never pass through unvalidated user input."""
+    if table_name not in EXPORTABLE_TABLES:
+        raise ValueError(f"Unknown/disallowed table {table_name!r}; must be one of {EXPORTABLE_TABLES}")
+    query = f"SELECT * FROM {table_name}"  # noqa: S608 - table_name is allowlist-checked above
+    if limit is not None:
+        query += f" LIMIT {int(limit)}"
+    return con.execute(query).pl()
+
+
 def export_daily_parquet(con: duckdb.DuckDBPyConnection, storage: StorageConfig,
                           trade_date: dt.date) -> str:
     """Export one day's chain snapshots to a partitioned Parquet file
