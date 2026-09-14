@@ -326,15 +326,20 @@ def export_daily_parquet(con: duckdb.DuckDBPyConnection, storage: StorageConfig,
     out_dir = storage.resolved_parquet_dir() / f"dt={trade_date:%Y-%m-%d}"
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / "chain_snapshots.parquet"
+
+    # DuckDB's COPY ... TO <target> does not accept a bound (?) parameter
+    # for the target filename -- it must be a literal in the SQL text.
+    # trade_date/out_path are internally constructed (not user input), so
+    # embed them directly with SQL-literal escaping rather than binding.
+    escaped_path = str(out_path).replace("'", "''")
     con.execute(
-        """
+        f"""
         COPY (
             SELECT cs.*, oc.underlying, oc.expiry, oc.strike, oc."right"
             FROM chain_snapshots cs
             JOIN option_contracts oc USING (contract_id)
-            WHERE CAST(cs.ts AS DATE) = ?
-        ) TO ? (FORMAT PARQUET)
-        """,
-        [trade_date, str(out_path)],
+            WHERE CAST(cs.ts AS DATE) = DATE '{trade_date.isoformat()}'
+        ) TO '{escaped_path}' (FORMAT PARQUET)
+        """
     )
     return str(out_path)
