@@ -1,4 +1,9 @@
 [provider]
+# "yfinance" (default, no key needed) | "tradier" (needs TRADIER_TOKEN) |
+# "alpaca" (needs ALPACA_API_KEY/ALPACA_SECRET_KEY) -- see .env.example.
+# Tradier/Alpaca are implemented against their documented APIs but untested
+# live in this environment (no credentials available) -- verify before relying
+# on them for anything beyond a starting point.
 name = "yfinance"
 
 [watchlist]

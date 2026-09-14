@@ -13,13 +13,17 @@ from ..corporate_actions.detector import detect_and_flag
 from ..greeks.bsm import all_greeks
 from ..greeks.iv import solve_iv
 from ..storage import repo
+from .alpaca_provider import AlpacaProvider
 from .base import Provider
+from .tradier_provider import TradierProvider
 from .yfinance_provider import YFinanceProvider
 
 logger = logging.getLogger(__name__)
 
 PROVIDERS: dict[str, type] = {
     "yfinance": YFinanceProvider,
+    "tradier": TradierProvider,
+    "alpaca": AlpacaProvider,
 }
 
 
