@@ -103,3 +103,7 @@ class TradierProvider:
     def fetch_corporate_actions(self, symbol: str) -> pd.DataFrame:
         logger.info("TradierProvider: corporate-action detection not implemented (no simple endpoint), skipping")
         return pd.DataFrame(columns=["date", "action_type", "value"])
+
+    def fetch_sector(self, symbol: str) -> str | None:
+        logger.info("TradierProvider: sector lookup not implemented, skipping")
+        return None

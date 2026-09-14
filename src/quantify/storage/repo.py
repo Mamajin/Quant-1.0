@@ -187,6 +187,15 @@ def insert_alert(con: duckdb.DuckDBPyConnection, signal_id: int, channel: str,
     )
 
 
+def symbol_sector(con: duckdb.DuckDBPyConnection, symbol: str) -> str | None:
+    row = con.execute("SELECT sector FROM symbols WHERE symbol = ?", [symbol]).fetchone()
+    return row[0] if row else None
+
+
+def update_symbol_sector(con: duckdb.DuckDBPyConnection, symbol: str, sector: str) -> None:
+    con.execute("UPDATE symbols SET sector = ? WHERE symbol = ?", [sector, symbol])
+
+
 def corporate_action_exists(con: duckdb.DuckDBPyConnection, symbol: str,
                              action_date: dt.date, action_type: str) -> bool:
     row = con.execute(

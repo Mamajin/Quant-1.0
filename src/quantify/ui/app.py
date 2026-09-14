@@ -18,6 +18,7 @@ from quantify.export import to_bytes
 from quantify.ingest.pipeline import run_ingestion
 from quantify.journal.manager import close_position, journal_stats, open_position
 from quantify.scanner.gex import dollar_gex_by_strike
+from quantify.scanner.heatmap import sector_flow, sector_summary
 from quantify.service import get_chain, get_flow, get_gex_summary, get_scan
 from quantify.storage import repo
 from quantify.storage.db import connect
@@ -70,8 +71,8 @@ st.sidebar.info(
     "an edge-hunting research tool, not a money printer (manual sec 1.8/Appendix D)."
 )
 
-tab_chain, tab_scanner, tab_flow, tab_gex, tab_backtest, tab_journal = st.tabs(
-    ["Chain Viewer", "Scanner", "Flow Feed", "GEX / Max Pain", "Backtest", "Journal"]
+tab_chain, tab_scanner, tab_flow, tab_gex, tab_heatmap, tab_backtest, tab_journal = st.tabs(
+    ["Chain Viewer", "Scanner", "Flow Feed", "GEX / Max Pain", "Sector Heatmap", "Backtest", "Journal"]
 )
 
 with tab_chain:
@@ -189,6 +190,39 @@ with tab_gex:
             fig.add_vline(x=gex["gamma_flip"], line_dash="dot", line_color="orange", annotation_text="gamma flip")
         fig.update_layout(xaxis_title="Strike", yaxis_title="Dollar GEX / 1% move", height=450)
         st.plotly_chart(fig, width='stretch')
+
+with tab_heatmap:
+    st.subheader("Sector flow heatmap")
+    st.caption(
+        "Net premium (calls - puts, $) and put/call ratio per symbol across "
+        "the whole watchlist, aggregated by sector (manual sec 2.4 'Sector "
+        "Flow heatmap', FR-012). Sector is looked up once per symbol on "
+        "ingestion (best-effort; yfinance only -- Tradier/Alpaca don't "
+        "implement it) and shows 'Unknown' until then."
+    )
+    flow_df = sector_flow(con, watchlist)
+    summary_df = sector_summary(flow_df)
+
+    if summary_df.is_empty():
+        st.info("No chain data yet for any watchlist symbol -- refresh a few symbols first.")
+    else:
+        fig = go.Figure(go.Bar(
+            x=summary_df["sector"].to_list(),
+            y=summary_df["total_net_premium"].to_list(),
+            text=summary_df["n_symbols"].to_list(),
+            texttemplate="%{text} symbol(s)",
+        ))
+        fig.update_layout(xaxis_title="Sector", yaxis_title="Total net premium ($)", height=400)
+        st.plotly_chart(fig, width='stretch')
+
+    st.markdown("**Per-symbol detail**")
+    st.dataframe(
+        flow_df.to_pandas(), width='stretch',
+        column_config={
+            "net_premium": st.column_config.NumberColumn("Net premium ($)", help="Calls - puts, $ (sec 3.5)"),
+            "put_call_ratio": st.column_config.NumberColumn("P/C ratio", help="<0.7 bullish, >1.3 bearish (sec 3.5)"),
+        },
+    )
 
 with tab_backtest:
     st.subheader(f"{symbol} backtest -- SMA crossover")

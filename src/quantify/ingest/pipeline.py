@@ -105,6 +105,14 @@ def ingest_symbol(con, config: QuantifyConfig, provider: Provider, symbol: str,
     repo.upsert_contracts(con, contracts)
     repo.insert_underlying_quote(con, symbol, ts, spot)
 
+    if repo.symbol_sector(con, symbol) is None:
+        try:
+            sector = provider.fetch_sector(symbol)
+            if sector:
+                repo.update_symbol_sector(con, symbol, sector)
+        except Exception as exc:  # noqa: BLE001 - sector lookup (FR-012) must never break ingestion
+            logger.warning("Sector lookup failed for %s: %s", symbol, exc)
+
     try:
         detect_and_flag(con, provider, symbol)
     except Exception as exc:  # noqa: BLE001 - corporate-action detection must never break ingestion

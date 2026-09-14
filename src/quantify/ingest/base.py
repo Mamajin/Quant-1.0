@@ -40,3 +40,8 @@ class Provider(Protocol):
         """Splits and dividends (FR-018). Columns: date, action_type
         ('split'|'dividend'), value (split ratio or $/share dividend)."""
         ...
+
+    def fetch_sector(self, symbol: str) -> str | None:
+        """GICS-ish sector name for the sector heatmap (FR-012), or None if
+        unavailable/unknown. Best-effort -- never raises."""
+        ...

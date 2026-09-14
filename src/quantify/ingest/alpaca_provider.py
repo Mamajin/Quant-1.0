@@ -130,3 +130,7 @@ class AlpacaProvider:
     def fetch_corporate_actions(self, symbol: str) -> pd.DataFrame:
         logger.info("AlpacaProvider: corporate-action detection not implemented, skipping")
         return pd.DataFrame(columns=["date", "action_type", "value"])
+
+    def fetch_sector(self, symbol: str) -> str | None:
+        logger.info("AlpacaProvider: sector lookup not implemented, skipping")
+        return None

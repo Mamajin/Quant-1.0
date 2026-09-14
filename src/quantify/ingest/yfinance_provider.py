@@ -102,3 +102,13 @@ class YFinanceProvider:
         if not rows:
             return pd.DataFrame(columns=["date", "action_type", "value"])
         return pd.DataFrame(rows)
+
+    def fetch_sector(self, symbol: str) -> str | None:
+        # yfinance's .info is notably slow/flaky (sec 4.4: "expect yfinance
+        # to break") -- best-effort only, never raises, never blocks ingestion.
+        try:
+            sector = yf.Ticker(symbol).info.get("sector")
+            return sector or None
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("yfinance: could not fetch sector for %s (%s)", symbol, exc)
+            return None
