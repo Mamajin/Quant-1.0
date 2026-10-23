@@ -111,3 +111,22 @@ def test_export_endpoint_rejects_unknown_table(client):
 def test_export_endpoint_rejects_bad_format(client):
     resp = client.get("/export/symbols", params={"fmt": "xlsx"})
     assert resp.status_code == 422
+
+
+def test_health_endpoint_empty(client):
+    resp = client.get("/health")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["total_rows"] == 0
+    assert body["error_count"] == 0
+    assert body["last_run"] is None
+
+
+def test_health_endpoint_reflects_ingestion_runs(client):
+    from quantify.api.main import app
+    from quantify.storage import repo
+    repo.insert_ingestion_run(app.state.con, dt.datetime.now(), "AAPL", 42, success=True)
+    resp = client.get("/health")
+    body = resp.json()
+    assert body["total_rows"] == 42
+    assert body["error_count"] == 0

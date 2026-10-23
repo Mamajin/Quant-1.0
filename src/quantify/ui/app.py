@@ -66,6 +66,16 @@ with st.sidebar.expander("Export data (FR-014)"):
         disabled=export_df.is_empty(),
     )
 
+with st.sidebar.expander("Pipeline health (sec 4.6)"):
+    metrics = repo.ingestion_metrics(con, since_hours=24.0)
+    st.caption(f"Last {metrics['since_hours']:.0f}h")
+    h1, h2 = st.columns(2)
+    h1.metric("Rows ingested", metrics["total_rows"])
+    h2.metric("Errors", metrics["error_count"])
+    st.caption(f"Last run: {metrics['last_run'] or 'never'}")
+    if metrics["per_symbol"]:
+        st.dataframe(metrics["per_symbol"], width='stretch', hide_index=True)
+
 st.sidebar.info(
     "Free data is delayed ~15 minutes and flow signals are noisy -- this is "
     "an edge-hunting research tool, not a money printer (manual sec 1.8/Appendix D)."

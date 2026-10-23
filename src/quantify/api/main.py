@@ -58,6 +58,12 @@ def read_max_pain(symbol: str):
     return {"symbol": summary["symbol"], "max_pain": summary["max_pain"]}
 
 
+@app.get("/health")
+def read_health(since_hours: float = Query(24.0, gt=0.0)):
+    """sec 4.6: 'a simple local metrics page (rows ingested, last run, error counts)'."""
+    return repo.ingestion_metrics(app.state.con, since_hours=since_hours)
+
+
 @app.get("/export/{table}")
 def export_table(table: str, fmt: str = Query("csv", pattern="^(csv|parquet)$")):
     """FR-014: CSV/Parquet export of any known table."""

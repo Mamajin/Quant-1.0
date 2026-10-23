@@ -5,6 +5,7 @@ __pycache__/
 data/parquet/
 data/*.duckdb
 data/*.duckdb.wal
+data/logs/
 .env
 *.log
 .DS_Store

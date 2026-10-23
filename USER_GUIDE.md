@@ -333,7 +333,19 @@ uv run uvicorn quantify.api.main:app --reload
 Then visit `http://localhost:8000/docs` for an interactive list of every
 endpoint (auto-generated — try things directly in the browser). Endpoints
 mirror the dashboard tabs: `/chain/{symbol}`, `/scan`, `/flow`, `/gex/{symbol}`,
-`/maxpain/{symbol}`, and `/export/{table}`.
+`/maxpain/{symbol}`, `/export/{table}`, and `/health` (how much data's been
+ingested recently, and whether anything's been failing — see
+[Pipeline health](#pipeline-health) below).
+
+### Pipeline health
+
+The sidebar's "Pipeline health" panel (and the `/health` API endpoint) show
+how ingestion has actually been going over the last 24 hours: total rows
+pulled in, how many attempts failed, and a per-symbol breakdown. Useful for
+noticing a provider has started silently failing before you'd otherwise
+spot it. A full structured log also accumulates at `data/logs/quantify.log`
+(rotated automatically so it doesn't grow forever) if you need more detail
+than the summary panel shows.
 
 ## 7. Running with Docker
 

@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 import argparse
-import logging
 
 from ..alerts.dispatch import check_and_alert
 from ..config import load_config
+from ..logging_config import configure_logging
 from ..storage.db import connect
 from .pipeline import run_ingestion
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+configure_logging()
 
 
 def main() -> None:

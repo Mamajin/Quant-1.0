@@ -2,13 +2,13 @@
 from __future__ import annotations
 
 import argparse
-import logging
 
 from ..config import load_config
+from ..logging_config import configure_logging
 from ..storage.db import connect
 from .runner import run_and_store, summarize
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+configure_logging()
 
 
 def main() -> None:

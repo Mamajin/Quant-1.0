@@ -14,6 +14,7 @@ from apscheduler.triggers.cron import CronTrigger
 
 from ..alerts.dispatch import check_and_alert
 from ..config import load_config
+from ..logging_config import configure_logging
 from ..storage import repo
 from ..storage.db import connect
 from .pipeline import run_ingestion
@@ -67,7 +68,7 @@ def build_scheduler(config, con) -> BlockingScheduler:
 
 
 def run_scheduler(config_path: str | None = None) -> None:
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    configure_logging()
     config = load_config(config_path)
     con = connect(config.storage)
     scheduler = build_scheduler(config, con)

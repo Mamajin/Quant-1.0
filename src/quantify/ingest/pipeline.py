@@ -133,9 +133,14 @@ def run_ingestion(con, config: QuantifyConfig, symbols: list[str] | None = None)
     targets = symbols or config.watchlist.validated_symbols()
     results: dict[str, int] = {}
     for symbol in targets:
+        run_ts = dt.datetime.now()
         try:
-            results[symbol] = ingest_symbol(con, config, provider, symbol)
+            rows = ingest_symbol(con, config, provider, symbol, ts=run_ts)
+            results[symbol] = rows
+            repo.insert_ingestion_run(con, run_ts, symbol, rows, success=True)
+            logger.info("Ingested %s: %d rows", symbol, rows)
         except Exception as exc:  # noqa: BLE001 - one bad symbol shouldn't kill the run
             logger.error("Ingestion failed for %s: %s", symbol, exc)
             results[symbol] = 0
+            repo.insert_ingestion_run(con, run_ts, symbol, 0, success=False, error_message=str(exc))
     return results

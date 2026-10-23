@@ -310,9 +310,61 @@ def latest_backtest_runs(con: duckdb.DuckDBPyConnection, limit: int = 50) -> pl.
     return con.execute("SELECT * FROM backtest_runs ORDER BY created_ts DESC LIMIT ?", [limit]).pl()
 
 
+def insert_ingestion_run(con: duckdb.DuckDBPyConnection, ts: dt.datetime, symbol: str,
+                          rows_ingested: int, success: bool, error_message: str | None = None) -> None:
+    con.execute(
+        "INSERT INTO ingestion_runs (ts, symbol, rows_ingested, success, error_message) VALUES (?, ?, ?, ?, ?)",
+        [ts, symbol, rows_ingested, success, error_message],
+    )
+
+
+def ingestion_metrics(con: duckdb.DuckDBPyConnection, since_hours: float = 24.0) -> dict:
+    """sec 4.6: 'a simple local metrics page (rows ingested, last run, error
+    counts)'. Summarizes ingestion_runs over the trailing `since_hours`."""
+    since = dt.datetime.now() - dt.timedelta(hours=since_hours)
+    row = con.execute(
+        """
+        SELECT
+            MAX(ts) AS last_run,
+            COALESCE(SUM(rows_ingested), 0) AS total_rows,
+            COALESCE(SUM(CASE WHEN NOT success THEN 1 ELSE 0 END), 0) AS error_count,
+            COUNT(DISTINCT symbol) AS symbols_touched
+        FROM ingestion_runs
+        WHERE ts >= ?
+        """,
+        [since],
+    ).fetchone()
+    last_run, total_rows, error_count, symbols_touched = row
+
+    per_symbol = con.execute(
+        """
+        SELECT symbol, MAX(ts) AS last_run, SUM(rows_ingested) AS rows_ingested,
+               SUM(CASE WHEN NOT success THEN 1 ELSE 0 END) AS error_count
+        FROM ingestion_runs
+        WHERE ts >= ?
+        GROUP BY symbol
+        ORDER BY last_run DESC
+        """,
+        [since],
+    ).fetchall()
+
+    return {
+        "since_hours": since_hours,
+        "last_run": last_run,
+        "total_rows": int(total_rows),
+        "error_count": int(error_count),
+        "symbols_touched": int(symbols_touched),
+        "per_symbol": [
+            {"symbol": s, "last_run": lr, "rows_ingested": int(ri or 0), "error_count": int(ec or 0)}
+            for s, lr, ri, ec in per_symbol
+        ],
+    }
+
+
 EXPORTABLE_TABLES = (
     "symbols", "option_contracts", "chain_snapshots", "trades_flow", "signals",
     "alerts", "backtest_runs", "positions", "journal", "corporate_actions", "underlying_quotes",
+    "ingestion_runs",
 )
 
 

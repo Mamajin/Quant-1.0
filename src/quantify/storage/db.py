@@ -21,6 +21,7 @@ CREATE SEQUENCE IF NOT EXISTS seq_backtest_runs START 1;
 CREATE SEQUENCE IF NOT EXISTS seq_positions START 1;
 CREATE SEQUENCE IF NOT EXISTS seq_journal START 1;
 CREATE SEQUENCE IF NOT EXISTS seq_corporate_actions START 1;
+CREATE SEQUENCE IF NOT EXISTS seq_ingestion_runs START 1;
 
 CREATE TABLE IF NOT EXISTS symbols (
     symbol VARCHAR PRIMARY KEY,
@@ -146,8 +147,20 @@ CREATE TABLE IF NOT EXISTS journal (
     notes VARCHAR
 );
 
+-- sec 4.6: "a simple local metrics page (rows ingested, last run, error
+-- counts)" -- one row per symbol per ingestion attempt, success or failure.
+CREATE TABLE IF NOT EXISTS ingestion_runs (
+    id BIGINT PRIMARY KEY DEFAULT nextval('seq_ingestion_runs'),
+    ts TIMESTAMP,
+    symbol VARCHAR,
+    rows_ingested INTEGER,
+    success BOOLEAN,
+    error_message VARCHAR
+);
+
 CREATE INDEX IF NOT EXISTS idx_chain_snapshots_contract_ts ON chain_snapshots(contract_id, ts);
 CREATE INDEX IF NOT EXISTS idx_chain_snapshots_ts ON chain_snapshots(ts);
+CREATE INDEX IF NOT EXISTS idx_ingestion_runs_ts ON ingestion_runs(ts);
 """
 
 
