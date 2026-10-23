@@ -1,0 +1,32 @@
+# CI (manual sec 2.15 'Testing strategy', sec 4.8 'Version control &
+# releases'). Runs the full pytest suite on every push/PR against main, plus
+# a non-blocking dependency vulnerability scan (sec 4.10).
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          python-version: "3.10"
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --extra dev --frozen
+
+      - name: Run tests
+        run: uv run pytest -q
+
+      - name: Dependency vulnerability scan (non-blocking)
+        run: uv run python -m quantify.maintenance.cli audit
+        continue-on-error: true
