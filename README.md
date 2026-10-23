@@ -113,3 +113,26 @@ docker compose up --build   # dashboard at http://localhost:8501
 (`docker compose --profile api up`). **Don't run more than one of
 ui/api/scheduler against the same `./data` at once** — DuckDB is
 single-writer (manual §2.9); see the comment at the top of the compose file.
+
+## Maintenance
+
+```bash
+# Reclaim space / flush the WAL (sec 4.3)
+uv run python -m quantify.maintenance.cli vacuum
+
+# Scan installed dependencies for known CVEs (sec 4.10)
+uv run python -m quantify.maintenance.cli audit
+```
+
+`audit` genuinely calls `pip-audit` against this project's resolved
+environment — it's not a stub. As of the last dependency bump, it reports
+one unresolved, documented finding: **Pillow stays on 12.3.0** (several
+CVEs, fixed in 13.0.0) because Streamlit itself pins `pillow<13` — there's
+no supported way to move past that from this project until Streamlit
+relaxes its own constraint. `urllib3` was successfully bumped (2.7.0 →
+2.8.0) to clear its CVEs when this was last run. Re-run `audit`
+periodically and re-evaluate.
+
+Structured logs accumulate at `data/logs/quantify.log` (JSON, rotated
+automatically); ingestion health (rows ingested, error counts, last run)
+is visible in the dashboard sidebar or via `GET /health`.
